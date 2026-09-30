@@ -2,7 +2,7 @@
 
 ## Current state
 
-Score: 4/10 (was 1/10) — tested pure-Kotlin domain core and honest CI; the
+Score: 5/10 (was 4/10) — tested pure-Kotlin domain core and honest CI; the
 Compose UI is still a placeholder and the Android build is unverified locally.
 
 ## Backlog
@@ -16,7 +16,7 @@ Compose UI is still a placeholder and the Android build is unverified locally.
 - P2: Compose UI tests (`androidx.compose.ui:ui-test-junit4`) for the main flow.
 - P2: Pin `distributionSha256Sum` in `gradle-wrapper.properties`.
 
-## Done in this pass
+## Done in this pass (pass 1)
 
 - Added `core/` (included Gradle build) with the app's domain logic and 7 unit tests.
 - Committed the Gradle wrapper (8.10.2).
@@ -25,3 +25,10 @@ Compose UI is still a placeholder and the Android build is unverified locally.
   target 17; added `com.google.android.material` for the manifest theme.
 - CI: removed `|| true`; separate `core` and `android` jobs.
 - README now states what is verified and what is not.
+
+## Done in this pass (pass 2)
+
+- Fixed: hard-splitting a long word could cut an emoji (surrogate pair) in half, producing broken glyphs.
+- Fixed: templates shorter than 4px (or narrower than 2px) crashed `layout`; captions now fall back to the minimum font. `fit` rejects `maxFontPx < MIN_FONT_PX` instead of silently returning a larger font.
+- 8 more edge-case tests (15 total): surrogate pairs, repeated spaces, Unicode upper-casing, argument validation, monotonic fit, file-name bounds. Verified with `./gradlew -p core test --offline`.
+- Still not verified locally: the Compose `app/` (no Android SDK; dl.google.com is blocked here).

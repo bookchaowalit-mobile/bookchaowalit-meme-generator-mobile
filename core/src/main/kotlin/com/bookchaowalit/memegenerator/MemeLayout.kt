@@ -34,8 +34,11 @@ object MemeLayout {
             var w = word
             while (w.length > maxChars) {
                 if (current.isNotEmpty()) { lines += current.toString(); current = StringBuilder() }
-                lines += w.take(maxChars)
-                w = w.drop(maxChars)
+                // Never cut an emoji / astral character (surrogate pair) in half.
+                var cut = maxChars
+                if (Character.isHighSurrogate(w[cut - 1])) cut = if (cut > 1) cut - 1 else 2
+                lines += w.take(cut)
+                w = w.drop(cut)
             }
             if (w.isEmpty()) continue
             if (current.isEmpty()) current.append(w)
@@ -53,6 +56,7 @@ object MemeLayout {
      */
     fun fit(text: String, slot: CaptionSlot, boxWidthPx: Int, boxHeightPx: Int, maxFontPx: Int = 72): CaptionLayout {
         require(boxWidthPx > 0 && boxHeightPx > 0) { "box must be positive" }
+        require(maxFontPx >= MIN_FONT_PX) { "maxFontPx must be at least $MIN_FONT_PX" }
         val normalized = normalize(text)
         if (normalized.isEmpty()) return CaptionLayout(slot, emptyList(), maxFontPx)
         for (size in maxFontPx downTo MIN_FONT_PX) {
@@ -69,8 +73,9 @@ object MemeLayout {
     fun layout(template: MemeTemplate, captions: Map<CaptionSlot, String>): List<CaptionLayout> {
         val unknown = captions.keys - template.slots
         require(unknown.isEmpty()) { "template ${template.id} has no slot(s) $unknown" }
-        val boxW = (template.widthPx * 0.9).toInt()
-        val boxH = template.heightPx / 4
+        // At least 1px so tiny templates degrade to the minimum font instead of throwing.
+        val boxW = maxOf(1, (template.widthPx * 0.9).toInt())
+        val boxH = maxOf(1, template.heightPx / 4)
         return template.slots.sortedBy { it.ordinal }.map { slot -> fit(captions[slot].orEmpty(), slot, boxW, boxH) }
     }
 
