@@ -32,3 +32,9 @@ Compose UI is still a placeholder and the Android build is unverified locally.
 - Fixed: templates shorter than 4px (or narrower than 2px) crashed `layout`; captions now fall back to the minimum font. `fit` rejects `maxFontPx < MIN_FONT_PX` instead of silently returning a larger font.
 - 8 more edge-case tests (15 total): surrogate pairs, repeated spaces, Unicode upper-casing, argument validation, monotonic fit, file-name bounds. Verified with `./gradlew -p core test --offline`.
 - Still not verified locally: the Compose `app/` (no Android SDK; dl.google.com is blocked here).
+
+## Done in this pass (pass 3)
+
+- Fixed `wrap` counting UTF-16 units: Thai text wrapped too early (combining vowels/tone marks counted as cells) and hard-splits could orphan a mark at the start of a line or cut ZWJ emoji families, skin-tone modifiers and flags apart. Wrapping now works on grapheme clusters (`MemeLayout.graphemes`).
+- Fixed `normalize`: only ASCII whitespace was collapsed, so U+2028/ideographic spaces stayed inside captions, and zero-width-only captions (U+200B/U+2060/BOM) produced an invisible line.
+- 3 regression tests (18 total), verified with `./gradlew -p core test --offline`.

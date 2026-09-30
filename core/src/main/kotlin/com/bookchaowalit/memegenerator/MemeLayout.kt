@@ -20,32 +20,90 @@ object MemeLayout {
     const val MIN_FONT_PX = 12
 
     /** Classic meme style: upper-case, whitespace collapsed. */
-    fun normalize(text: String): String = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").uppercase()
+    fun normalize(text: String): String {
+        val words = mutableListOf<String>()
+        val current = StringBuilder()
+        for (c in text) {
+            when {
+                // Any Unicode space (NBSP, U+2028, ideographic space, ...) separates words.
+                c.isWhitespace() -> if (current.isNotEmpty()) { words += current.toString(); current.clear() }
+                // Zero-width / BOM characters would otherwise produce invisible captions.
+                c in INVISIBLE -> Unit
+                else -> current.append(c)
+            }
+        }
+        if (current.isNotEmpty()) words += current.toString()
+        return words.joinToString(" ").uppercase()
+    }
+
+    private val INVISIBLE = setOf('\u200B', '\u2060', '\uFEFF', '\u00AD')
 
     /**
-     * Greedy word wrap to at most [maxChars] per line. Words longer than a
-     * line are hard-split so nothing overflows.
+     * Splits [text] into user-perceived characters: a base code point plus any
+     * combining marks (Thai vowels/tone marks), variation selectors, emoji skin
+     * tones and ZWJ-joined emoji; regional-indicator pairs (flags) stay together.
+     */
+    fun graphemes(text: String): List<String> {
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < text.length) {
+            val start = i
+            var cp = text.codePointAt(i)
+            i += Character.charCount(cp)
+            if (isRegionalIndicator(cp) && i < text.length && isRegionalIndicator(text.codePointAt(i))) {
+                i += Character.charCount(text.codePointAt(i))
+            }
+            while (i < text.length) {
+                val next = text.codePointAt(i)
+                if (next == ZWJ) {
+                    i += 1
+                    if (i < text.length) { cp = text.codePointAt(i); i += Character.charCount(cp) }
+                } else if (isExtender(next)) {
+                    i += Character.charCount(next)
+                } else {
+                    break
+                }
+            }
+            out += text.substring(start, i)
+        }
+        return out
+    }
+
+    private const val ZWJ = 0x200D
+
+    private fun isRegionalIndicator(cp: Int) = cp in 0x1F1E6..0x1F1FF
+
+    private fun isExtender(cp: Int): Boolean {
+        val type = Character.getType(cp)
+        return type == Character.NON_SPACING_MARK.toInt() ||
+            type == Character.ENCLOSING_MARK.toInt() ||
+            type == Character.COMBINING_SPACING_MARK.toInt() ||
+            cp in 0xFE00..0xFE0F || cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F
+    }
+
+    /**
+     * Greedy word wrap to at most [maxChars] user-perceived characters per
+     * line (see [graphemes]: an emoji or a Thai syllable with its marks counts
+     * once). Words longer than a line are hard-split between graphemes so
+     * nothing overflows and no emoji or combining mark is cut off.
      */
     fun wrap(text: String, maxChars: Int): List<String> {
         require(maxChars > 0) { "maxChars must be positive" }
         val lines = mutableListOf<String>()
-        var current = StringBuilder()
+        var current = mutableListOf<String>()
         for (word in text.split(' ').filter { it.isNotEmpty() }) {
-            var w = word
-            while (w.length > maxChars) {
-                if (current.isNotEmpty()) { lines += current.toString(); current = StringBuilder() }
-                // Never cut an emoji / astral character (surrogate pair) in half.
-                var cut = maxChars
-                if (Character.isHighSurrogate(w[cut - 1])) cut = if (cut > 1) cut - 1 else 2
-                lines += w.take(cut)
-                w = w.drop(cut)
+            var w = graphemes(word)
+            while (w.size > maxChars) {
+                if (current.isNotEmpty()) { lines += current.joinToString(""); current = mutableListOf() }
+                lines += w.take(maxChars).joinToString("")
+                w = w.drop(maxChars)
             }
             if (w.isEmpty()) continue
-            if (current.isEmpty()) current.append(w)
-            else if (current.length + 1 + w.length <= maxChars) current.append(' ').append(w)
-            else { lines += current.toString(); current = StringBuilder(w) }
+            if (current.isEmpty()) current.addAll(w)
+            else if (current.size + 1 + w.size <= maxChars) { current.add(" "); current.addAll(w) }
+            else { lines += current.joinToString(""); current = w.toMutableList() }
         }
-        if (current.isNotEmpty()) lines += current.toString()
+        if (current.isNotEmpty()) lines += current.joinToString("")
         return lines
     }
 
